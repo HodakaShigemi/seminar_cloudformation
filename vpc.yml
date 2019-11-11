@@ -24,6 +24,126 @@ Resources:
             - '-'
             - - !Ref NamePrefix
               - Vpc
+  SubnetPublic0:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt Vpc.CidrBlock, 4, 8 ]]
+      MapPublicIpOnLaunch: Yes
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Public-0]]
+  SubnetPublic1:
+    Type: AWS::EC2::Subnet
+    DependsOn: Vpc
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt Vpc.CidrBlock, 4, 8 ]]
+      MapPublicIpOnLaunch: Yes
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Public-1]]
+  SubnetPrivate0:
+    Type: AWS::EC2::Subnet
+    DependsOn: Vpc
+    Properties:
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt Vpc.CidrBlock, 4, 8 ]]
+      MapPublicIpOnLaunch: Yes
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Private-0]]
+  SubnetPrivate1:
+    Type: AWS::EC2::Subnet
+    DependsOn: Vpc
+    Properties:
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 3, !Cidr [ !GetAtt Vpc.CidrBlock, 4, 8 ]]
+      MapPublicIpOnLaunch: Yes
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Private-1]]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Internet-Gateway]]
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  RouteTablePublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Public]]
+  RouteToInternet:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  RouteTableAssociationPublic0:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPublic0
+      RouteTableId: !Ref RouteTablePublic
+  RouteTableAssociationPublic1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPublic1
+      RouteTableId: !Ref RouteTablePublic
+  ElasticIpNatGateway:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIpNatGateway.AllocationId
+      SubnetId: !Ref SubnetPublic0
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Nat-Gateway]]
+  RouteTablePrivate:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, Private]]
+  RouteToNatGateway:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+  RouteTableAssociationPrivate0:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPrivate0
+      RouteTableId: !Ref RouteTablePrivate
+  RouteTableAssociationPrivate1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetPrivate1
+      RouteTableId: !Ref RouteTablePrivate
 Outputs:
   VpcId:
     Description: VPC ID
@@ -33,3 +153,35 @@ Outputs:
         - ''
         - - !Ref NamePrefix
           - VpcId
+  SubnetIdPublic0:
+    Description: Subnet ID for public subnet 0
+    Value: !Ref SubnetPublic0
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SubnetIdPublic0
+  SubnetIdPublic1:
+    Description: Subnet ID for public subnet 1
+    Value: !Ref SubnetPublic1
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SubnetIdPublic1
+  SubnetIdPrivate0:
+    Description: Subnet ID for private subnet 0
+    Value: !Ref SubnetPrivate0
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SubnetIdPrivate0
+  SubnetIdPrivate1:
+    Description: Subnet ID for private subnet 1
+    Value: !Ref SubnetPrivate1
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SubnetIdPrivate1
