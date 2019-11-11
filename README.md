@@ -1,0 +1,2 @@
+# CloudFormation hands-on seminar
+
