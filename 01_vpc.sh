@@ -3,7 +3,7 @@
 AWS_PROFILE=""
 CHANGESET_OPTION="--no-execute-changeset"
 CFN_TEMPLATE=vpc.yml
-CFN_STACK_NAME=seminar-cfn
+CFN_STACK_NAME=seminar-cfn-vpc
 
 if [ $# = 1 ] && [ $1 = "deploy" ]; then
   echo "deploy mode"
