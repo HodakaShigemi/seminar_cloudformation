@@ -17,6 +17,6 @@ fi
 # exec deploy command
 aws cloudformation deploy \
     ${PROFILE_OPTION} \
-    --stack-name ${CFN_STACK_NAME} \
-    --template-file ${CFN_TEMPLATE} \
+    --stack-name "${CFN_STACK_NAME}" \
+    --template-file "${CFN_TEMPLATE}" \
     ${CHANGESET_OPTION}
