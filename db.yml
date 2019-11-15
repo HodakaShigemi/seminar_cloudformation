@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: cloudformation hands-on db
+Parameters:
+  NamePrefix:
+    Description: Prefix for resource Name to identify
+    Type: String
+    Default: seminar-cfn
+  DbName:
+    Description: demo RDS DB name (initial DB)
+    Type: String
+    Default: seminarcfn
+  DbId:
+    Description: demo RDS instance Identifier
+    Type: String
+    Default: seminar-cfn-db
+  DbInstanceClass:
+    Description: demo RDS instance Instance class
+    Type: String
+    Default: db.t2.micro
+  DbAllocationStorage:
+    Description: demo RDS instance allocation storage
+    Type: Number
+    Default: 20
+  DbMasterUserName:
+    Description: demo RDS instance master user name
+    Type: String
+    Default: seminarcfn
+  DbMasterPassword:
+    Description: demo RDS instance master user password
+    Type: String
+    Default: seminarseminar
+    NoEcho: true
+  DbMultiAz:
+    Description: whether multi AZ or not
+    Type: String
+    Default: false
+Resources:
+  DB:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      AllocatedStorage: !Ref DbAllocationStorage
+      AutoMinorVersionUpgrade: false
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub "${NamePrefix}SgIdDb"
+      DBName: !Ref DbName
+      BackupRetentionPeriod: 7
+      DBInstanceIdentifier: !Ref DbId
+      DBInstanceClass: !Ref DbInstanceClass
+      DBSubnetGroupName: !Ref SubnetGroupDb
+      Engine: mysql
+      EngineVersion: 5.6.41
+      MasterUsername: !Ref DbMasterUserName
+      MasterUserPassword: !Ref DbMasterPassword
+      MultiAZ: !Ref DbMultiAz
+      StorageType: gp2
+  SubnetGroupDb:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: Private subnet
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPrivate0"
+        - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPrivate1"
+Outputs:
+  DbEndpoint:
+    Description: RDS end point
+    Value: !GetAtt [DB, Endpoint.Address]
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - DbEndpoint
