@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: cloudformation hands-on security groups
+Parameters:
+  NamePrefix:
+    Description: Prefix for resource Name to identify
+    Type: String
+    Default: seminar-cfn
+  MyIp:
+    Description: "IP CIDR which allow access to server"
+    Type : String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+Resources:
+  SecurityGroupAlb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref AWS::StackName
+          - lb
+      GroupDescription: CloudFormation Managed
+      VpcId:
+        Fn::ImportValue: !Sub "${NamePrefix}VpcId"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, lb]]
+  SGInAlbHttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupAlb
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: !Ref MyIp
+  SecurityGroupAp:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref AWS::StackName
+          - ap
+      GroupDescription: CloudFormation Managed
+      VpcId:
+        Fn::ImportValue: !Sub "${NamePrefix}VpcId"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, ap]]
+  SGInApHttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupAp
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref SecurityGroupAlb
+  SGInApSsh:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupAp
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref MyIp
+  SecurityGroupDb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref AWS::StackName
+          - db
+      GroupDescription: CloudFormation Managed
+      VpcId:
+        Fn::ImportValue: !Sub "${NamePrefix}VpcId"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, db]]
+  SGInDbAp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroupDb
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref SecurityGroupAp
+Outputs:
+  SgIdAlb:
+    Description: Security Group ID for ALB
+    Value: !Ref SecurityGroupAlb
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SgIdAlb
+  SgIdAp:
+    Description: Security Group ID for AP Server
+    Value: !Ref SecurityGroupAp
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SgIdAp
+  SgIdDb:
+    Description: Security Group ID for DB
+    Value: !Ref SecurityGroupDb
+    Export:
+      Name: !Join
+        - ''
+        - - !Ref NamePrefix
+          - SgIdDb
