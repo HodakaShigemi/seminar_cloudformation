@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: cloudformation hands-on ap
+Parameters:
+  SshKey:
+    Description: ssh key name for test server
+    Type: String
+    Default: seminar
+  NamePrefix:
+    Description: Prefix for resource Name to identify
+    Type: String
+    Default: seminar-cfn
+  InstanceType:
+    Description: demo server instance InstanceType
+    Type: String
+    Default: t2.micro
+  DbMasterUserName:
+    Description: demo RDS instance master user name
+    Type: String
+    Default: cfdemo
+  DbMasterPassword:
+    Description: demo RDS instance master user password
+    Type: String
+    Default: demodemodemo
+    NoEcho: true
+Mappings:
+  AmiMap:
+    us-west-1:
+      amazon2: ami-0019ef04ac50be30f
+    us-west-2:
+      amazon2: ami-061392db613a6357b
+    us-east-1:
+      amazon2: ami-0de53d8956e8dcf80
+    us-east-2:
+      amazon2: ami-02bcbb802e03574ba
+    ap-northeast-1:
+      amazon2: ami-0f9ae750e8274075b
+    ap-northeast-2:
+      amazon2: ami-047f7b46bd6dd5d84
+    ap-northeast-3:
+      amazon2: ami-088d713d672ed235e
+    ap-southeast-1:
+      amazon2: ami-0b419c3a4b01d1859
+    ap-southeast-2:
+      amazon2: ami-04481c741a0311bbb
+    ap-south-1:
+      amazon2: ami-0889b8a448de4fc44
+    eu-central-1:
+      amazon2: ami-09def150731bdbcc2
+    eu-west-1:
+      amazon2: ami-07683a44e80cd32c5
+    eu-west-2:
+      amazon2: ami-09ead922c1dad67e4
+    eu-west-3:
+      amazon2: ami-0451ae4fd8dd178f7
+    eu-north-1:
+      amazon2: ami-d16fe6af
+    ca-central-1:
+      amazon2: ami-03338e1f67dae0168
+Resources:
+  EC2Ap:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref SshKey
+      ImageId: !FindInMap
+        - AmiMap
+        - !Ref 'AWS::Region'
+        - amazon2
+      InstanceType: !Ref InstanceType
+      Monitoring: false
+      SubnetId:
+        Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic0"
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${NamePrefix}SgIdAp"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, ap]]
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash -xv
+            DB_HOST=${DB_HOST}
+            DB_USER=${DB_USER}
+            DB_PASSWORD=${DB_PASSWORD}
+            WP_ACCESS_RANGE=10.0.0.0/255.255.0.0
+            WP_PASSWORD=CXQwJxMXT4sB
+            yum update -y
+            yum install -y httpd mariadb
+            amazon-linux-extras install php7.2
+            yum install php-mysqlnd
+            cat << DDL > /opt/wordpress.ddl
+            CREATE DATABASE wordpress;
+            GRANT ALL PRIVILEGES ON wordpress.* TO "wordpressuser"@"$WP_ACCESS_RANGE" IDENTIFIED BY "$WP_PASSWORD";
+            FLUSH PRIVILEGES;
+            EXIT
+            DDL
+            mysql -h $DB_HOST -u $DB_USER --password=$DB_PASSWORD < /opt/wordpress.ddl
+            curl https://wordpress.org/latest.tar.gz | tar -zx
+            mv wordpress /var/www/
+            function random_string(){
+              head -c $(( $1 * 3/2 )) /dev/urandom | \
+              base64 | \
+              head -c $1
+            }
+            cat <<EOL > /var/www/wordpress/wp-config.php
+            <?php
+            // ** MySQL settings - You can get this info from your web host ** //
+            /** The name of the database for WordPress */
+            define( 'DB_NAME', 'wordpress' );
+            /** MySQL database username */
+            define( 'DB_USER', 'wordpressuser' );
+            /** MySQL database password */
+            define( 'DB_PASSWORD', '$WP_PASSWORD' );
+            /** MySQL hostname */
+            define( 'DB_HOST', '$DB_HOST' );
+            /** Database Charset to use in creating database tables. */
+            define( 'DB_CHARSET', 'utf8mb4' );
+            /** The Database Collate type. Don't change this if in doubt. */
+            define( 'DB_COLLATE', '' );
+            /**#@+
+             * Authentication Unique Keys and Salts.
+             *
+             * Change these to different unique phrases!
+             * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
+             * You can change these at any point in time to invalidate all existing cookies. This will force all users to have to log in again.
+             *
+             * @since 2.6.0
+             */
+            define( 'AUTH_KEY',         '$(random_string 64)' );
+            define( 'SECURE_AUTH_KEY',  '$(random_string 64)' );
+            define( 'LOGGED_IN_KEY',    '$(random_string 64)' );
+            define( 'NONCE_KEY',        '$(random_string 64)' );
+            define( 'AUTH_SALT',        '$(random_string 64)' );
+            define( 'SECURE_AUTH_SALT', '$(random_string 64)' );
+            define( 'LOGGED_IN_SALT',   '$(random_string 64)' );
+            define( 'NONCE_SALT',       '$(random_string 64)' );
+            EOL
+            cat <<'EOL' >> /var/www/wordpress/wp-config.php
+            /**
+             * WordPress Database Table prefix.
+             */
+            $table_prefix = 'wp_';
+            /**
+             * For developers: WordPress debugging mode.
+             */
+            define( 'WP_DEBUG', false );
+            /* That's all, stop editing! Happy publishing. */
+            /** Absolute path to the WordPress directory. */
+            if ( ! defined( 'ABSPATH' ) ) {
+                define( 'ABSPATH', dirname( __FILE__ ) . '/' );
+            }
+            /** Sets up WordPress vars and included files. */
+            require_once( ABSPATH . 'wp-settings.php' );
+            EOL
+            chown -R apache:apache /var/www/wordpress
+            sed --in-place  's%^DocumentRoot "/var/www/html"%DocumentRoot "/var/www/wordpress"%' /etc/httpd/conf/httpd.conf
+            sed --in-place  's%^<Directory "/var/www">%<Directory "/var/www/wordpress">%' /etc/httpd/conf/httpd.conf
+            sed --in-place -r '/^<Directory "\/var\/www\/wordpress">/,/^<\/Directory>/ s/.*AllowOverride None/    AllowOverride All/' /etc/httpd/conf/httpd.conf
+            systemctl daemon-reload
+            systemctl start httpd
+            systemctl enable httpd
+          - DB_HOST:
+              Fn::ImportValue: !Sub "${NamePrefix}DbEndpoint"
+            DB_USER: !Ref DbMasterUserName
+            DB_PASSWORD: !Ref DbMasterPassword
+  Alb:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Join
+        - '-'
+        - - !Ref NamePrefix
+          - lb
+      Scheme: internet-facing
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${NamePrefix}SgIdAlb"
+      Subnets:
+        - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic0"
+        - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic1"
+      Type: application
+  AlbListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+  AlbTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      TargetType: instance
+      HealthCheckIntervalSeconds: 6
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      Name: !Join
+        - '-'
+        - - !Ref NamePrefix
+          - lb
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '60'
+      Targets:
+        - Id: !Ref EC2Ap
+      UnhealthyThresholdCount: 3
+      VpcId:
+        Fn::ImportValue: !Sub "${NamePrefix}VpcId"
+Outputs:
+  WordPressUrl:
+    Description: URL to access wordpress
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt
+          - Alb
+          - DNSName
+
