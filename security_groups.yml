@@ -16,10 +16,6 @@ Resources:
   SecurityGroupAlb:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Join
-        - '-'
-        - - !Ref AWS::StackName
-          - lb
       GroupDescription: CloudFormation Managed
       VpcId:
         Fn::ImportValue: !Sub "${NamePrefix}VpcId"
@@ -37,10 +33,6 @@ Resources:
   SecurityGroupAp:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Join
-        - '-'
-        - - !Ref AWS::StackName
-          - ap
       GroupDescription: CloudFormation Managed
       VpcId:
         Fn::ImportValue: !Sub "${NamePrefix}VpcId"
@@ -66,10 +58,6 @@ Resources:
   SecurityGroupDb:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Join
-        - '-'
-        - - !Ref AWS::StackName
-          - db
       GroupDescription: CloudFormation Managed
       VpcId:
         Fn::ImportValue: !Sub "${NamePrefix}VpcId"
