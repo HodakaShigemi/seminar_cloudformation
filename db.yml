@@ -9,10 +9,6 @@ Parameters:
     Description: demo RDS DB name (initial DB)
     Type: String
     Default: seminarcfn
-  DbId:
-    Description: demo RDS instance Identifier
-    Type: String
-    Default: seminar-cfn-db
   DbInstanceClass:
     Description: demo RDS instance Instance class
     Type: String
@@ -21,15 +17,15 @@ Parameters:
     Description: demo RDS instance allocation storage
     Type: Number
     Default: 20
-  DbMasterUserName:
-    Description: demo RDS instance master user name
-    Type: String
-    Default: seminarcfn
-  DbMasterPassword:
-    Description: demo RDS instance master user password
-    Type: String
-    Default: seminarseminar
-    NoEcho: true
+# DbMasterUserName:
+#   Description: demo RDS instance master user name
+#   Type: String
+#   Default: seminarcfn
+# DbMasterPassword:
+#   Description: demo RDS instance master user password
+#   Type: String
+#   Default: seminarseminar
+#   NoEcho: true
   DbMultiAz:
     Description: whether multi AZ or not
     Type: String
@@ -44,15 +40,17 @@ Resources:
         - Fn::ImportValue: !Sub "${NamePrefix}SgIdDb"
       DBName: !Ref DbName
       BackupRetentionPeriod: 7
-      DBInstanceIdentifier: !Ref DbId
       DBInstanceClass: !Ref DbInstanceClass
       DBSubnetGroupName: !Ref SubnetGroupDb
       Engine: mysql
       EngineVersion: 5.6.41
-      MasterUsername: !Ref DbMasterUserName
-      MasterUserPassword: !Ref DbMasterPassword
+      MasterUsername: "{{resolve:ssm:/seminar/cfn-handson/db-user:1}}"
+      MasterUserPassword: "{{resolve:ssm-secure:/seminar/cfn-handson/db-pass:1}}"
       MultiAZ: !Ref DbMultiAz
       StorageType: gp2
+      Tags:
+        - Key: Name
+          Value: !Sub "${NamePrefix}Db"
   SubnetGroupDb:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
