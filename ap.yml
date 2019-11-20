@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: cloudformation hands-on ap
 Parameters:
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
   SshKey:
     Description: ssh key name for test server
     Type: String
@@ -12,60 +15,24 @@ Parameters:
   InstanceType:
     Description: demo server instance InstanceType
     Type: String
-    Default: t2.micro
+    Default: t3.micro
   DbMasterUserName:
     Description: demo RDS instance master user name
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /seminar/cfn-handson/db-user
+  DbPasswordKey:
+    Description: ssm parameter key for db password
     Type: String
-    Default: cfdemo
-  DbMasterPassword:
-    Description: demo RDS instance master user password
-    Type: String
-    Default: demodemodemo
-    NoEcho: true
-Mappings:
-  AmiMap:
-    us-west-1:
-      amazon2: ami-0019ef04ac50be30f
-    us-west-2:
-      amazon2: ami-061392db613a6357b
-    us-east-1:
-      amazon2: ami-0de53d8956e8dcf80
-    us-east-2:
-      amazon2: ami-02bcbb802e03574ba
-    ap-northeast-1:
-      amazon2: ami-0f9ae750e8274075b
-    ap-northeast-2:
-      amazon2: ami-047f7b46bd6dd5d84
-    ap-northeast-3:
-      amazon2: ami-088d713d672ed235e
-    ap-southeast-1:
-      amazon2: ami-0b419c3a4b01d1859
-    ap-southeast-2:
-      amazon2: ami-04481c741a0311bbb
-    ap-south-1:
-      amazon2: ami-0889b8a448de4fc44
-    eu-central-1:
-      amazon2: ami-09def150731bdbcc2
-    eu-west-1:
-      amazon2: ami-07683a44e80cd32c5
-    eu-west-2:
-      amazon2: ami-09ead922c1dad67e4
-    eu-west-3:
-      amazon2: ami-0451ae4fd8dd178f7
-    eu-north-1:
-      amazon2: ami-d16fe6af
-    ca-central-1:
-      amazon2: ami-03338e1f67dae0168
+    Default: /seminar/cfn-handson/db-pass
 Resources:
   EC2Ap:
     Type: AWS::EC2::Instance
     Properties:
       KeyName: !Ref SshKey
-      ImageId: !FindInMap
-        - AmiMap
-        - !Ref 'AWS::Region'
-        - amazon2
-      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmiId
+      #InstanceType: !Ref InstanceType
+      InstanceType: "{{resolve:ssm:/seminar/cfn-handson/ap-size:1}}"
+      IamInstanceProfile: !Ref InstanceProfile
       Monitoring: false
       SubnetId:
         Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic0"
@@ -78,9 +45,9 @@ Resources:
         Fn::Base64: !Sub
           - |
             #!/bin/bash -xv
-            DB_HOST=${DB_HOST}
-            DB_USER=${DB_USER}
-            DB_PASSWORD=${DB_PASSWORD}
+            DB_HOST="${DB_HOST}"
+            DB_USER="${DbMasterUserName}"
+            DB_PASSWORD="$(aws ssm get-parameter --name ${DbPasswordKey} --with-decryption --query Parameter.Value --output text --region ${AWS::Region})"
             WP_ACCESS_RANGE=10.0.0.0/255.255.0.0
             WP_PASSWORD=CXQwJxMXT4sB
             yum update -y
@@ -93,7 +60,7 @@ Resources:
             FLUSH PRIVILEGES;
             EXIT
             DDL
-            mysql -h $DB_HOST -u $DB_USER --password=$DB_PASSWORD < /opt/wordpress.ddl
+            mysql -h $DB_HOST -u "$DB_USER" --password="$DB_PASSWORD" < /opt/wordpress.ddl
             curl https://wordpress.org/latest.tar.gz | tar -zx
             mv wordpress /var/www/
             function random_string(){
@@ -160,15 +127,10 @@ Resources:
             systemctl enable httpd
           - DB_HOST:
               Fn::ImportValue: !Sub "${NamePrefix}DbEndpoint"
-            DB_USER: !Ref DbMasterUserName
-            DB_PASSWORD: !Ref DbMasterPassword
+            DB_USER: "{{resolv:ssm:/hoge:1}}"
   Alb:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Join
-        - '-'
-        - - !Ref NamePrefix
-          - lb
       Scheme: internet-facing
       SecurityGroups:
         - Fn::ImportValue: !Sub "${NamePrefix}SgIdAlb"
@@ -176,6 +138,9 @@ Resources:
         - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic0"
         - Fn::ImportValue: !Sub "${NamePrefix}SubnetIdPublic1"
       Type: application
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, lb-ap]]
   AlbListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
@@ -195,10 +160,6 @@ Resources:
       HealthyThresholdCount: 2
       Matcher:
         HttpCode: '200'
-      Name: !Join
-        - '-'
-        - - !Ref NamePrefix
-          - lb
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -209,6 +170,41 @@ Resources:
       UnhealthyThresholdCount: 3
       VpcId:
         Fn::ImportValue: !Sub "${NamePrefix}VpcId"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref NamePrefix, tg-ap]]
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref RoleAp
+  RoleAp:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        -
+          PolicyName: "ssm-get-parameter"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "ssm:GetParameter"
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DbPasswordKey}"
+              -
+                Effect: "Allow"
+                Action: "kms:Decrypt"
+                Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/aws/ssm"
 Outputs:
   WordPressUrl:
     Description: URL to access wordpress
