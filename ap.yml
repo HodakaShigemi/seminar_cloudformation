@@ -30,8 +30,7 @@ Resources:
     Properties:
       KeyName: !Ref SshKey
       ImageId: !Ref AmiId
-      #InstanceType: !Ref InstanceType
-      InstanceType: "{{resolve:ssm:/seminar/cfn-handson/ap-size:1}}"
+      InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       Monitoring: false
       SubnetId:
